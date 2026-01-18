@@ -1,0 +1,91 @@
+name: Build and Publish Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '9.0.x'
+
+    - name: Extract version from tag
+      id: version
+      run: |
+        # Remove 'v' prefix from tag if present
+        VERSION=${GITHUB_REF#refs/tags/v}
+        VERSION=${VERSION#refs/tags/}
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "Version: $VERSION"
+
+    - name: Update csproj version
+      run: |
+        VERSION="${{ steps.version.outputs.version }}"
+        sed -i "s/<AssemblyVersion>.*<\/AssemblyVersion>/<AssemblyVersion>$VERSION<\/AssemblyVersion>/" JellyfinSubsPlugin/JellyfinSubsPlugin.csproj
+        sed -i "s/<FileVersion>.*<\/FileVersion>/<FileVersion>$VERSION<\/FileVersion>/" JellyfinSubsPlugin/JellyfinSubsPlugin.csproj
+
+    - name: Build plugin
+      run: dotnet build --configuration Release JellyfinSubsPlugin/JellyfinSubsPlugin.csproj
+
+    - name: Create release package
+      run: |
+        VERSION="${{ steps.version.outputs.version }}"
+        mkdir -p release
+        cd JellyfinSubsPlugin/bin/Release/net9.0
+        zip -j "../../../../release/jellyfin-subsro-${VERSION}.zip" \
+          JellyfinSubsPlugin.dll \
+          SharpCompress.dll \
+          ZstdSharp.dll
+
+    - name: Calculate checksum
+      id: checksum
+      run: |
+        VERSION="${{ steps.version.outputs.version }}"
+        CHECKSUM=$(md5sum "release/jellyfin-subsro-${VERSION}.zip" | awk '{print $1}')
+        echo "checksum=$CHECKSUM" >> $GITHUB_OUTPUT
+        echo "Checksum: $CHECKSUM"
+
+    - name: Update manifest.json
+      run: |
+        VERSION="${{ steps.version.outputs.version }}"
+        CHECKSUM="${{ steps.checksum.outputs.checksum }}"
+        TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+        TAG_NAME="${GITHUB_REF#refs/tags/}"
+        
+        # Get release notes from GitHub release
+        CHANGELOG=$(gh release view "$TAG_NAME" --json body --jq .body)
+        
+        # Run the update script
+        chmod +x .github/scripts/update_manifest.py
+        python3 .github/scripts/update_manifest.py "$VERSION" "$CHECKSUM" "$TIMESTAMP" "$CHANGELOG" "$TAG_NAME"
+      env:
+        GH_TOKEN: ${{ github.token }}
+
+    - name: Commit and push manifest.json
+      run: |
+        git config --local user.email "github-actions[bot]@users.noreply.github.com"
+        git config --local user.name "github-actions[bot]"
+        git add manifest.json
+        git diff --staged --quiet || git commit -m "Update manifest.json for version ${{ steps.version.outputs.version }}"
+        git push origin HEAD:main
+
+    - name: Upload release asset
+      run: |
+        VERSION="${{ steps.version.outputs.version }}"
+        TAG_NAME="${GITHUB_REF#refs/tags/}"
+        gh release upload "$TAG_NAME" "release/jellyfin-subsro-${VERSION}.zip" --clobber
+      env:
+        GH_TOKEN: ${{ github.token }}
