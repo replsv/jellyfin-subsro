@@ -34,8 +34,8 @@ jobs:
     - name: Update csproj version
       run: |
         VERSION="${{ steps.version.outputs.version }}"
-        sed -i "s/<AssemblyVersion>.*<\/AssemblyVersion>/<AssemblyVersion>$VERSION<\/AssemblyVersion>/" JellyfinSubsPlugin/JellyfinSubsPlugin.csproj
-        sed -i "s/<FileVersion>.*<\/FileVersion>/<FileVersion>$VERSION<\/FileVersion>/" JellyfinSubsPlugin/JellyfinSubsPlugin.csproj
+        sed -i "s|<AssemblyVersion>.*</AssemblyVersion>|<AssemblyVersion>$VERSION</AssemblyVersion>|" JellyfinSubsPlugin/JellyfinSubsPlugin.csproj
+        sed -i "s|<FileVersion>.*</FileVersion>|<FileVersion>$VERSION</FileVersion>|" JellyfinSubsPlugin/JellyfinSubsPlugin.csproj
 
     - name: Build plugin
       run: dotnet build --configuration Release JellyfinSubsPlugin/JellyfinSubsPlugin.csproj
