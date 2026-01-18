@@ -1,0 +1,90 @@
+root = true
+
+############################################################
+# Global
+############################################################
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+############################################################
+# C#
+############################################################
+[*.cs]
+indent_size = 4
+
+# New lines
+csharp_new_line_before_open_brace = all
+csharp_new_line_before_else = true
+csharp_new_line_before_catch = true
+csharp_new_line_before_finally = true
+
+# Using directives
+dotnet_sort_system_directives_first = true
+dotnet_separate_import_directive_groups = true
+
+############################################################
+# Library-specific style
+############################################################
+# Require explicit accessibility (important for public APIs)
+dotnet_style_require_accessibility_modifiers = always:warning
+
+# Prefer explicit types for clarity in libraries
+csharp_style_var_for_built_in_types = false:suggestion
+csharp_style_var_when_type_is_apparent = true:suggestion
+csharp_style_var_elsewhere = false:suggestion
+
+# Expression-bodied members (keep readable APIs)
+csharp_style_expression_bodied_methods = when_on_single_line:suggestion
+csharp_style_expression_bodied_properties = when_on_single_line:suggestion
+
+# Braces always
+csharp_prefer_braces = true:warning
+
+# readonly correctness
+dotnet_style_readonly_field = true:suggestion
+
+############################################################
+# Modern C#
+############################################################
+csharp_style_switch_expression = true:suggestion
+csharp_style_pattern_matching_over_is_with_cast_check = true:suggestion
+csharp_style_pattern_matching_over_as_with_null_check = true:suggestion
+csharp_style_prefer_not_pattern = true:suggestion
+
+############################################################
+# Naming
+############################################################
+# Interfaces: IPublicThing
+dotnet_naming_rule.interfaces_prefixed_with_i.severity = warning
+dotnet_naming_rule.interfaces_prefixed_with_i.symbols = interfaces
+dotnet_naming_rule.interfaces_prefixed_with_i.style = interface_style
+
+dotnet_naming_symbols.interfaces.applicable_kinds = interface
+dotnet_naming_style.interface_style.required_prefix = I
+dotnet_naming_style.interface_style.capitalization = pascal_case
+
+# Private fields: _camelCase
+dotnet_naming_rule.private_fields_underscore.severity = suggestion
+dotnet_naming_rule.private_fields_underscore.symbols = private_fields
+dotnet_naming_rule.private_fields_underscore.style = underscore_style
+
+dotnet_naming_symbols.private_fields.applicable_kinds = field
+dotnet_naming_symbols.private_fields.applicable_accessibilities = private
+dotnet_naming_style.underscore_style.required_prefix = _
+dotnet_naming_style.underscore_style.capitalization = camel_case
+
+############################################################
+# Analyzer severities
+############################################################
+dotnet_analyzer_diagnostic.category-Style.severity = suggestion
+dotnet_analyzer_diagnostic.category-Design.severity = suggestion
+
+# Nullable is non-negotiable for libraries
+dotnet_diagnostic.CS8600.severity = warning
+dotnet_diagnostic.CS8602.severity = warning
+dotnet_diagnostic.CS8604.severity = warning

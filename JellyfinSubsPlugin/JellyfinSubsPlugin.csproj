@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <TargetFramework>net9.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <RootNamespace>Jellyfin.Plugin.SubsRo</RootNamespace>
+        <GenerateEmbeddedFilesManifest>true</GenerateEmbeddedFilesManifest>
+        <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+
+        <!-- Assembly metadata -->
+        <AssemblyVersion>1.0.0.0</AssemblyVersion>
+        <FileVersion>1.0.0.0</FileVersion>
+        <Authors>gm</Authors>
+        <Company>gm</Company>
+        <Product>Jellyfin Subs.ro Plugin</Product>
+        <Description>Subtitle provider plugin for Jellyfin that downloads subtitles from Subs.ro</Description>
+        <PackageProjectUrl>https://github.com/replsv/jellyfin-subsro</PackageProjectUrl>
+        <RepositoryUrl>https://github.com/replsv/jellyfin-subsro</RepositoryUrl>
+        <RepositoryType>git</RepositoryType>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Jellyfin.Controller" Version="10.11.5">
+            <ExcludeAssets>runtime</ExcludeAssets>
+        </PackageReference>
+        <PackageReference Include="Jellyfin.Model" Version="10.11.5">
+            <ExcludeAssets>runtime</ExcludeAssets>
+        </PackageReference>
+        <PackageReference Include="Microsoft.Extensions.Http" Version="9.0.1">
+            <ExcludeAssets>runtime</ExcludeAssets>
+        </PackageReference>
+        <PackageReference Include="SharpCompress" Version="0.38.0" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <EmbeddedResource Include="Configuration\**\*" />
+    </ItemGroup>
+</Project>

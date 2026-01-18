@@ -1,0 +1,20 @@
+---
+name: "Subs.ro"
+guid: "949bf0ee-811c-4c92-af1f-2df08bfa7dd1"
+version: "1.0.0.0"
+targetAbi: "10.11.5.0"
+framework: "net9.0"
+owner: "subsro"
+overview: "Download subtitles from Subs.ro"
+description: >
+  This plugin allows you to download subtitles from Subs.ro for your movies and TV shows.
+  You will need an API key from Subs.ro to use this plugin.
+category: "Metadata"
+repository: "https://github.com/replsv/jellyfin-subsro"
+artifacts:
+  - "JellyfinSubsPlugin.dll"
+  - "SharpCompress.dll"
+  - "ZstdSharp.dll"
+build_type: "dotnet"
+dotnet_configuration: "Release"
+dotnet_framework: "net9.0"

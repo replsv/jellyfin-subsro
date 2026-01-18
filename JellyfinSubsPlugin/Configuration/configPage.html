@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Subs.ro Configuration</title>
+</head>
+<body>
+    <div id="SubsRoConfigPage" data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-input,emby-button,emby-select">
+        <div data-role="content">
+            <div class="content-primary">
+                <form id="SubsRoConfigForm">
+                    <div class="sectionTitleContainer flex align-items-center">
+                        <h2 class="sectionTitle">Subs.ro Plugin Configuration</h2>
+                    </div>
+
+                    <div class="verticalSection">
+                        <p>
+                            This plugin downloads subtitles from <a href="https://subs.ro" target="_blank">Subs.ro</a>.
+                            You will need an API key to use this plugin. You can obtain one by creating an account on the website and generating an API key from your account.
+                        </p>
+                    </div>
+
+                    <div class="inputContainer">
+                        <label class="inputLabel inputLabelUnfocused" for="txtApiKey">API Key:</label>
+                        <input id="txtApiKey" name="txtApiKey" type="text" is="emby-input" class="emby-input" />
+                        <div class="fieldDescription">
+                            Enter your Subs.ro API key here.
+                        </div>
+                    </div>
+
+                    <div>
+                        <button is="emby-button" type="submit" class="raised button-submit block">
+                            <span>Save</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <script type="text/javascript">
+            var SubsRoConfig = {
+                pluginUniqueId: '949bf0ee-811c-4c92-af1f-2df08bfa7dd1'
+            };
+
+            document.getElementById('SubsRoConfigPage').addEventListener('pageshow', function () {
+                Dashboard.showLoadingMsg();
+
+                ApiClient.getPluginConfiguration(SubsRoConfig.pluginUniqueId).then(function (config) {
+                    document.getElementById('txtApiKey').value = config.ApiKey || '';
+                    Dashboard.hideLoadingMsg();
+                }).catch(function (error) {
+                    console.error('Error loading configuration:', error);
+                    Dashboard.hideLoadingMsg();
+                });
+            });
+
+            document.getElementById('SubsRoConfigForm').addEventListener('submit', function (e) {
+                e.preventDefault();
+                Dashboard.showLoadingMsg();
+
+                ApiClient.getPluginConfiguration(SubsRoConfig.pluginUniqueId).then(function (config) {
+                    var apiKey = document.getElementById('txtApiKey').value;
+                    
+                    // Validate API key is not empty
+                    if (!apiKey || apiKey.trim() === '') {
+                        Dashboard.hideLoadingMsg();
+                        Dashboard.alert('Please enter an API key.');
+                        return;
+                    }
+
+                    config.ApiKey = apiKey;
+
+                    // Test the API key by calling our proxy endpoint (to avoid CORS issues)
+                    var validateUrl = ApiClient.getUrl('Plugins/SubsRo/ValidateApiKey', {
+                        apiKey: apiKey
+                    });
+                    
+                    fetch(validateUrl, {
+                        method: 'GET',
+                        headers: {
+                            'X-Emby-Token': ApiClient.accessToken()
+                        }
+                    }).then(function (response) {
+                        if (!response.ok) {
+                            throw new Error('API key validation failed with status: ' + response.status);
+                        }
+                        return response.json();
+                    }).then(function (quotaData) {
+                        console.log('API key validated successfully. Quota:', quotaData);
+                        
+                        // Save the configuration
+                        return ApiClient.updatePluginConfiguration(SubsRoConfig.pluginUniqueId, config);
+                    }).then(function (result) {
+                        Dashboard.processPluginConfigurationUpdateResult(result);
+                        Dashboard.alert('API key saved and validated successfully!');
+                    }).catch(function (error) {
+                        console.error('Error validating or saving API key:', error);
+                        Dashboard.hideLoadingMsg();
+                        Dashboard.alert('Error: The API key appears to be invalid. Please check your API key and try again.');
+                    });
+                }).catch(function (error) {
+                    console.error('Error loading configuration:', error);
+                    Dashboard.hideLoadingMsg();
+                });
+
+                return false;
+            });
+        </script>
+    </div>
+</body>
+</html>
