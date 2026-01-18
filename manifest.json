@@ -10,19 +10,11 @@
         "versions": [
             {
                 "version": "0.1",
-                "changelog": "",
+                "changelog": "Initial release\n- Support for movies and TV series\n- IMDb and TMDb ID-based search\n- Smart episode matching for series archives\n- Season range support\n- Automatic format detection (ZIP/RAR)\n- Translator information display",
                 "targetAbi": "10.11.5.0",
                 "sourceUrl": "https://github.com/replsv/jellyfin-subsro/releases/download/v0.1/jellyfin-subsro-0.1.zip",
                 "checksum": "42ba00399092cb3a07513526966a4f62",
                 "timestamp": "2026-01-18T01:02:01Z"
-            },
-            {
-                "version": "1.0.0.0",
-                "changelog": "Initial release\n- Support for movies and TV series\n- IMDb and TMDb ID-based search\n- Smart episode matching for series archives\n- Season range support\n- Automatic format detection (ZIP/RAR)\n- Translator information display",
-                "targetAbi": "10.11.5.0",
-                "sourceUrl": "https://github.com/replsv/jellyfin-subsro/releases/download/v1.0.0/jellyfin-subsro-1.0.0.zip",
-                "checksum": "PLACEHOLDER_UPDATE_AFTER_BUILDING",
-                "timestamp": "2025-01-18T00:00:00Z"
             }
         ]
     }
