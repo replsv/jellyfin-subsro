@@ -5,7 +5,7 @@
         "description": "This plugin allows you to download subtitles from Subs.ro for your movies and TV shows. You will need an API key from Subs.ro to use this plugin.",
         "overview": "Download subtitles from Subs.ro",
         "owner": "gm",
-        "category": "Metadata",
+        "category": "Subtitles",
         "imageUrl": "https://raw.githubusercontent.com/replsv/jellyfin-subsro/main/logo.png",
         "versions": [
             {

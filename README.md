@@ -23,9 +23,10 @@ A Jellyfin plugin for downloading subtitles from [Subs.ro](https://subs.ro).
 
 1. Open Jellyfin dashboard
 2. Navigate to **Plugins** → **Catalog**
-3. Search for "Subs.ro"
-4. Click **Install**
-5. Restart Jellyfin
+3. Add to the list this repository:
+```
+https://raw.githubusercontent.com/replsv/jellyfin-subsro/master/manifest.json (for jellyfin 10.11)
+```
 
 ### Method 2: Manual Installation
 
@@ -41,6 +42,8 @@ A Jellyfin plugin for downloading subtitles from [Subs.ro](https://subs.ro).
 4. Restart Jellyfin
 
 **Note:** The plugin folder must be named exactly `Subs.ro` to match the plugin name. All three DLL files should be placed directly in this folder.
+
+Also, you can decide to build them your own. Details below.
 
 ## Configuration
 
