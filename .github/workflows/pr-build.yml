@@ -1,0 +1,44 @@
+name: PR Build Validation
+
+on:
+  pull_request:
+    branches:
+      - main
+      - master
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '9.0.x'
+
+    - name: Restore dependencies
+      run: dotnet restore JellyfinSubsPlugin/JellyfinSubsPlugin.csproj
+
+    - name: Build solution
+      run: dotnet build --configuration Release --no-restore JellyfinSubsPlugin/JellyfinSubsPlugin.csproj
+
+    - name: Verify required DLLs are present
+      run: |
+        echo "Checking for required DLL files..."
+        test -f JellyfinSubsPlugin/bin/Release/net9.0/JellyfinSubsPlugin.dll || (echo "ERROR: JellyfinSubsPlugin.dll not found" && exit 1)
+        test -f JellyfinSubsPlugin/bin/Release/net9.0/SharpCompress.dll || (echo "ERROR: SharpCompress.dll not found" && exit 1)
+        test -f JellyfinSubsPlugin/bin/Release/net9.0/ZstdSharp.dll || (echo "ERROR: ZstdSharp.dll not found" && exit 1)
+        echo "All required DLLs found!"
+
+    - name: Build summary
+      run: |
+        echo "Build completed successfully"
+        echo "Output directory: JellyfinSubsPlugin/bin/Release/net9.0/"
+        ls -lh JellyfinSubsPlugin/bin/Release/net9.0/*.dll
