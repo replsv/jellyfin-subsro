@@ -11,7 +11,7 @@ namespace Jellyfin.Plugin.SubsRo;
 public sealed class SubsRoApiV1
 {
     private const string _apiVersion = "v1.0";
-    private const string _baseUrl = $"https://subs.ro/api/{_apiVersion}";
+    private const string _baseUrl = $"https://api.subs.ro/{_apiVersion}";
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<SubsRoApiV1> _logger;
 
