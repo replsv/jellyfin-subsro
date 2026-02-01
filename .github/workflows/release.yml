@@ -1,8 +1,10 @@
 name: Build and Publish Release
 
 on:
-  release:
-    types: [published]
+  push:
+    tags:
+      - 'v*'
+      - '*'
 
 permissions:
   contents: write
@@ -10,7 +12,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -64,10 +66,15 @@ jobs:
         CHECKSUM="${{ steps.checksum.outputs.checksum }}"
         TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
         TAG_NAME="${GITHUB_REF#refs/tags/}"
-        
-        # Get release notes from GitHub release
-        CHANGELOG=$(gh release view "$TAG_NAME" --json body --jq .body)
-        
+
+        # Generate changelog from commits since last tag
+        LAST_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+        if [ -n "$LAST_TAG" ]; then
+          CHANGELOG=$(git log --pretty=format:"- %s" $LAST_TAG..HEAD)
+        else
+          CHANGELOG="Initial release"
+        fi
+
         # Run the update script
         chmod +x .github/scripts/update_manifest.py
         python3 .github/scripts/update_manifest.py "$VERSION" "$CHECKSUM" "$TIMESTAMP" "$CHANGELOG" "$TAG_NAME"
@@ -82,10 +89,31 @@ jobs:
         git diff --staged --quiet || git commit -m "Update manifest.json for version ${{ steps.version.outputs.version }}"
         git push origin HEAD:main
 
-    - name: Upload release asset
+    - name: Create GitHub Release with assets
       run: |
         VERSION="${{ steps.version.outputs.version }}"
         TAG_NAME="${GITHUB_REF#refs/tags/}"
-        gh release upload "$TAG_NAME" "release/jellyfin-subsro-${VERSION}.zip" --clobber
+
+        # Create release notes from recent commits if not already provided
+        if gh release view "$TAG_NAME" >/dev/null 2>&1; then
+          echo "Release already exists, uploading assets..."
+          gh release upload "$TAG_NAME" "release/jellyfin-subsro-${VERSION}.zip" --clobber
+        else
+          echo "Creating new release..."
+          # Generate changelog from commits since last tag
+          LAST_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [ -n "$LAST_TAG" ]; then
+            CHANGELOG=$(git log --pretty=format:"- %s" $LAST_TAG..HEAD)
+          else
+            CHANGELOG="- Initial release"
+          fi
+
+          # Create release with assets
+          gh release create "$TAG_NAME" \
+            "release/jellyfin-subsro-${VERSION}.zip" \
+            --title "Release $VERSION" \
+            --notes "$CHANGELOG" \
+            --target main
+        fi
       env:
         GH_TOKEN: ${{ github.token }}
