@@ -9,6 +9,14 @@
         "imageUrl": "https://raw.githubusercontent.com/replsv/jellyfin-subsro/main/logo.png",
         "versions": [
             {
+                "version": "0.2.0",
+                "changelog": "- fix: publish assets and auto-create release (#2)\n- Update manifest.json for version 0.1.2\n- chore: update api endpoint (#1)\n- Update manifest.json for version 0.1.1",
+                "targetAbi": "10.11.5.0",
+                "sourceUrl": "https://github.com/replsv/jellyfin-subsro/releases/download/v0.2.0/jellyfin-subsro-0.2.0.zip",
+                "checksum": "3841c59269c21c49efc28e477734ab02",
+                "timestamp": "2026-02-01T22:37:28Z"
+            },
+            {
                 "version": "0.1.2",
                 "changelog": "## What's Changed\r\n* chore: update api endpoint by @replsv in https://github.com/replsv/jellyfin-subsro/pull/1\r\n\r\n## New Contributors\r\n* @replsv made their first contribution in https://github.com/replsv/jellyfin-subsro/pull/1\r\n\r\n**Full Changelog**: https://github.com/replsv/jellyfin-subsro/compare/v0.1.1...v0.1.2",
                 "targetAbi": "10.11.5.0",
