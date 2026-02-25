@@ -107,8 +107,10 @@ internal static class ArchiveExtractor
             bestMatch = SubtitleMatchingHelper.FindBestEpisodeMatch(
                 fileNames,
                 episodeNumber.Value,
+                mediaFileName,
                 logger
             );
+
             if (bestMatch != null)
             {
                 logger.LogInformation(

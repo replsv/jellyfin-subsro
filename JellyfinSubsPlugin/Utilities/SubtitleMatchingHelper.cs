@@ -29,6 +29,7 @@ internal static class SubtitleMatchingHelper
     public static string? FindBestEpisodeMatch(
         List<string> fileNames,
         int episodeNumber,
+        string? mediaFileName = null,
         ILogger? logger = null
     )
     {
@@ -61,17 +62,99 @@ internal static class SubtitleMatchingHelper
             }
         }
 
-        var exactMatch = filesWithEpisodes.FirstOrDefault(f => f.extractedEpisode == episodeNumber);
-        if (exactMatch.fileName != null)
+        // Prefer exact episode matches (can be multiple)
+        var episodeCandidates = filesWithEpisodes
+            .Where(f => f.extractedEpisode == episodeNumber)
+            .Select(f => f.fileName)
+            .ToList();
+
+        if (episodeCandidates.Count == 1)
         {
             logger?.LogDebug(
                 "Found exact episode match for E{Episode}: {FileName}",
                 episodeNumber,
-                exactMatch.fileName
+                episodeCandidates[0]
             );
-            return exactMatch.fileName;
+            return episodeCandidates[0];
         }
 
+        if (episodeCandidates.Count > 1)
+        {
+            logger?.LogDebug(
+                "Found {Count} exact episode matches for E{Episode}",
+                episodeCandidates.Count,
+                episodeNumber
+            );
+
+            // If we know the actual media filename, behave like movie matching:
+            // 1) match release format (WEB-DL / WEBRip / DVDRip, etc.)
+            // 2) Levenshtein closest filename
+            if (!string.IsNullOrEmpty(mediaFileName))
+            {
+                var mediaFormat = ExtractReleaseFormat(mediaFileName);
+
+                if (!string.IsNullOrEmpty(mediaFormat))
+                {
+                    var formatMatches = episodeCandidates
+                        .Where(f => f.Contains(mediaFormat, StringComparison.OrdinalIgnoreCase))
+                        .ToList();
+
+                    if (formatMatches.Count == 1)
+                    {
+                        logger?.LogDebug(
+                            "Episode tie-break: matched format '{Format}': {FileName}",
+                            mediaFormat,
+                            formatMatches[0]
+                        );
+                        return formatMatches[0];
+                    }
+
+                    if (formatMatches.Count > 1)
+                    {
+                        var best = FindClosestMatch(formatMatches, mediaFileName) ?? formatMatches[0];
+                        logger?.LogDebug(
+                            "Episode tie-break: multiple format matches '{Format}', using closest: {FileName}",
+                            mediaFormat,
+                            best
+                        );
+                        return best;
+                    }
+                }
+
+                var closest = FindClosestMatch(episodeCandidates, mediaFileName) ?? episodeCandidates[0];
+                logger?.LogDebug(
+                    "Episode tie-break: no format match, using closest to media filename: {FileName}",
+                    closest
+                );
+                return closest;
+            }
+
+            // No media filename available: use the same ReleaseFormats priority as movies
+            foreach (var format in ReleaseFormats)
+            {
+                var match = episodeCandidates.FirstOrDefault(f =>
+                    f.Contains(format, StringComparison.OrdinalIgnoreCase)
+                );
+                if (match != null)
+                {
+                    logger?.LogDebug(
+                        "Episode tie-break: using format priority '{Format}': {FileName}",
+                        format,
+                        match
+                    );
+                    return match;
+                }
+            }
+
+            // Absolute fallback: first in archive list
+            logger?.LogDebug(
+                "Episode tie-break: no format priority hit, using first candidate: {FileName}",
+                episodeCandidates[0]
+            );
+            return episodeCandidates[0];
+        }
+
+        // No regex-based exact matches, try patterns
         var episodePatterns = new[]
         {
             $"E{episodeNumber:D2}",
@@ -87,6 +170,7 @@ internal static class SubtitleMatchingHelper
             var patternMatches = fileNames
                 .Where(f => f.Contains(pattern, StringComparison.OrdinalIgnoreCase))
                 .ToList();
+
             if (patternMatches.Count == 1)
             {
                 logger?.LogDebug(
@@ -96,10 +180,15 @@ internal static class SubtitleMatchingHelper
                 );
                 return patternMatches[0];
             }
+
             if (patternMatches.Count > 1)
             {
-                // Multiple matches, use Levenshtein to find the best one
-                var bestMatch = FindClosestMatch(patternMatches, $"Episode{episodeNumber:D2}");
+                // If we have the media filename, use it as target; else use a stable target
+                var target = !string.IsNullOrEmpty(mediaFileName)
+                    ? mediaFileName
+                    : $"Episode{episodeNumber:D2}";
+
+                var bestMatch = FindClosestMatch(patternMatches, target) ?? patternMatches[0];
                 logger?.LogDebug(
                     "Multiple pattern matches for episode {Episode}, using closest: {FileName}",
                     episodeNumber,
@@ -109,12 +198,17 @@ internal static class SubtitleMatchingHelper
             }
         }
 
-        // Last resort: use Levenshtein distance on all files
+        // Last resort: fuzzy match over all files
         logger?.LogWarning(
             "No clear episode match found for episode {Episode}, using fuzzy matching",
             episodeNumber
         );
-        return FindClosestMatch(fileNames, $"E{episodeNumber:D2}");
+
+        var finalTarget = !string.IsNullOrEmpty(mediaFileName)
+            ? mediaFileName
+            : $"E{episodeNumber:D2}";
+
+        return FindClosestMatch(fileNames, finalTarget);
     }
 
     /// <summary>
