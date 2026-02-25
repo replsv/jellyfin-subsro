@@ -1,6 +1,9 @@
 using Jellyfin.Plugin.SubsRo.Extensions;
 using Jellyfin.Plugin.SubsRo.Models;
 using Jellyfin.Plugin.SubsRo.Utilities;
+using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Entities.TV;
+using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Providers;
 using MediaBrowser.Controller.Subtitles;
 using MediaBrowser.Model.Entities;
@@ -13,12 +16,18 @@ public sealed class SubsRoDownloader : ISubtitleProvider
 {
     private readonly ILogger<SubsRoDownloader> _logger;
     private readonly SubsRoApiV1 _apiV1;
+    private readonly ILibraryManager? _libraryManager;
 
-    public SubsRoDownloader(ILogger<SubsRoDownloader> logger, SubsRoApiV1 apiV1)
+    public SubsRoDownloader(
+        ILogger<SubsRoDownloader> logger,
+        SubsRoApiV1 apiV1,
+        ILibraryManager? libraryManager = null
+    )
     {
         Instance = this;
         _logger = logger;
         _apiV1 = apiV1;
+        _libraryManager = libraryManager;
         _logger.LogInformation("SubsRoDownloader initialized");
     }
 
@@ -57,7 +66,6 @@ public sealed class SubsRoDownloader : ISubtitleProvider
                 decodedInfo,
                 @"[Ss](\d+)[Ee](\d+)"
             );
-
             // episode or movie
             if (seMatch.Success)
             {
@@ -94,7 +102,6 @@ public sealed class SubsRoDownloader : ISubtitleProvider
         }
 
         var apiKey = GetApiKey();
-
         if (string.IsNullOrEmpty(apiKey))
         {
             _logger.LogWarning("API key not configured");
@@ -148,10 +155,11 @@ public sealed class SubsRoDownloader : ISubtitleProvider
     )
     {
         _logger.LogInformation(
-            "Subs.ro: Search called for: {Name}, ContentType: {ContentType}, Language: {Language}",
+            "Subs.ro: Search called for: {Name}, ContentType: {ContentType}, Language: {Language}, SeriesName: {SeriesName}",
             request.Name,
             request.ContentType,
-            request.Language
+            request.Language,
+            request.SeriesName
         );
 
         var apiKey = GetApiKey();
@@ -163,18 +171,46 @@ public sealed class SubsRoDownloader : ISubtitleProvider
 
         _logger.LogInformation("Subs.ro: API key is configured, proceeding with search");
 
-        var language = NormalizeLanguage(request.Language);
+        var normalizedLanguage = NormalizeLanguage(request.Language);
         var results = new List<RemoteSubtitleInfo>();
 
         try
         {
-            var imdbId = request.GetProviderId(MetadataProvider.Imdb);
-            if (!string.IsNullOrEmpty(imdbId))
+            var requestImdbId = request.GetProviderId(MetadataProvider.Imdb);
+            var requestTmdbId = request.GetProviderId(MetadataProvider.Tmdb);
+
+            string? seriesImdbId = null;
+            string? seriesTmdbId = null;
+            string? canonicalSeriesTitle = null;
+
+            if (request.ContentType == VideoContentType.Episode)
             {
-                _logger.LogDebug("Searching by IMDb ID: {ImdbId}", imdbId);
+                ResolveSeriesFromEpisodeRequest(request, out seriesImdbId, out seriesTmdbId, out canonicalSeriesTitle);
+            }
+
+            _logger.LogInformation(
+                "Subs.ro: Request IDs - IMDb: {ReqImdb}, TMDb: {ReqTmdb}; Resolved series - Title: {SeriesTitle}, IMDb: {SeriesImdb}, TMDb: {SeriesTmdb}",
+                requestImdbId,
+                requestTmdbId,
+                canonicalSeriesTitle,
+                seriesImdbId,
+                seriesTmdbId
+            );
+
+            var effectiveImdbId = request.ContentType == VideoContentType.Episode
+                ? (seriesImdbId ?? requestImdbId)
+                : requestImdbId;
+
+            var effectiveTmdbId = request.ContentType == VideoContentType.Episode
+                ? (seriesTmdbId ?? requestTmdbId)
+                : requestTmdbId;
+
+            if (!string.IsNullOrEmpty(effectiveImdbId))
+            {
+                _logger.LogDebug("Searching by IMDb ID: {ImdbId}", effectiveImdbId);
 
                 var searchResponse = await _apiV1
-                    .SearchSubtitlesAsync("imdbid", imdbId, language, apiKey, cancellationToken)
+                    .SearchSubtitlesAsync("imdbid", effectiveImdbId, normalizedLanguage, apiKey, cancellationToken)
                     .ConfigureAwait(false);
 
                 if (searchResponse?.Items != null && searchResponse.Items.Count > 0)
@@ -189,15 +225,20 @@ public sealed class SubsRoDownloader : ISubtitleProvider
                     );
                     return results;
                 }
+
+                _logger.LogInformation("Subs.ro: IMDb search returned 0 items");
+            }
+            else
+            {
+                _logger.LogInformation("Subs.ro: No IMDb id available for search");
             }
 
-            var tmdbId = request.GetProviderId(MetadataProvider.Tmdb);
-            if (!string.IsNullOrEmpty(tmdbId))
+            if (!string.IsNullOrEmpty(effectiveTmdbId))
             {
-                _logger.LogDebug("Searching by TMDb ID: {TmdbId}", tmdbId);
+                _logger.LogInformation("Subs.ro: Searching by TMDb ID: {TmdbId}", effectiveTmdbId);
 
                 var searchResponse = await _apiV1
-                    .SearchSubtitlesAsync("tmdbid", tmdbId, language, apiKey, cancellationToken)
+                    .SearchSubtitlesAsync("tmdbid", effectiveTmdbId, normalizedLanguage, apiKey, cancellationToken)
                     .ConfigureAwait(false);
 
                 if (searchResponse?.Items != null && searchResponse.Items.Count > 0)
@@ -212,17 +253,34 @@ public sealed class SubsRoDownloader : ISubtitleProvider
                     );
                     return results;
                 }
+
+                _logger.LogInformation("Subs.ro: TMDb search returned 0 items");
+            }
+            else
+            {
+                _logger.LogInformation("Subs.ro: No TMDb id available for search");
             }
 
-            if (!string.IsNullOrEmpty(request.Name))
+            var titleQuery =
+                request.ContentType == VideoContentType.Episode
+                    ? (canonicalSeriesTitle ?? request.SeriesName ?? request.Name)
+                    : request.Name;
+
+            if (!string.IsNullOrWhiteSpace(titleQuery))
             {
-                _logger.LogDebug("Searching by title: {Title}", request.Name);
+                _logger.LogInformation(
+                    "Subs.ro: Searching by title: {TitleQuery} (request.Name: {OriginalName}, request.SeriesName: {SeriesName}, canonicalSeriesTitle: {CanonicalSeriesTitle})",
+                    titleQuery,
+                    request.Name,
+                    request.SeriesName,
+                    canonicalSeriesTitle
+                );
 
                 var searchResponse = await _apiV1
                     .SearchSubtitlesAsync(
                         "title",
-                        request.Name,
-                        language,
+                        titleQuery,
+                        normalizedLanguage,
                         apiKey,
                         cancellationToken
                     )
@@ -235,6 +293,10 @@ public sealed class SubsRoDownloader : ISubtitleProvider
                     );
                 }
             }
+            else
+            {
+                _logger.LogWarning("Subs.ro: Title query is empty (cannot search by title)");
+            }
 
             _logger.LogDebug("Found {Count} subtitles", results.Count);
             _logger.LogInformation("Subs.ro: Returning {Count} subtitle results", results.Count);
@@ -246,6 +308,216 @@ public sealed class SubsRoDownloader : ISubtitleProvider
             return Array.Empty<RemoteSubtitleInfo>();
         }
     }
+
+    private void ResolveSeriesFromEpisodeRequest(
+        SubtitleSearchRequest request,
+        out string? seriesImdbId,
+        out string? seriesTmdbId,
+        out string? canonicalSeriesTitle
+    )
+    {
+        seriesImdbId = null;
+        seriesTmdbId = null;
+        canonicalSeriesTitle = null;
+
+        if (_libraryManager == null)
+        {
+            _logger.LogInformation("Subs.ro: ILibraryManager not available; cannot resolve series from episode");
+            return;
+        }
+
+        var item = TryResolveItemByRequestId(request);
+        if (item == null)
+        {
+            item = TryResolveItemByRequestPath(request);
+        }
+
+        if (item == null)
+        {
+            _logger.LogInformation(
+                "Subs.ro: Could not resolve episode item from request (neither id nor path). Request keys: {Keys}",
+                string.Join(", ", GetPublicPropertyNames(request))
+            );
+            return;
+        }
+
+        if (item is not Episode episode)
+        {
+            _logger.LogInformation("Subs.ro: Resolved item is not an Episode ({Type}); cannot resolve series", item.GetType().Name);
+            return;
+        }
+
+        Series? series = null;
+
+        try { series = episode.Series; } catch { }
+
+        if (series == null && episode.SeriesId != Guid.Empty)
+        {
+            series = _libraryManager.GetItemById(episode.SeriesId) as Series;
+        }
+
+        if (series == null && episode.SeasonId != Guid.Empty)
+        {
+            var season = _libraryManager.GetItemById(episode.SeasonId) as Season;
+            if (season != null && season.SeriesId != Guid.Empty)
+            {
+                series = _libraryManager.GetItemById(season.SeriesId) as Series;
+            }
+        }
+
+        if (series == null)
+        {
+            _logger.LogInformation("Subs.ro: Could not resolve Series from resolved Episode item {Id}", episode.Id);
+            return;
+        }
+
+        canonicalSeriesTitle = series.Name;
+        seriesImdbId = series.GetProviderId(MetadataProvider.Imdb);
+        seriesTmdbId = series.GetProviderId(MetadataProvider.Tmdb);
+
+        _logger.LogInformation(
+            "Subs.ro: Resolved series from episode - Title: {Title}, IMDb: {Imdb}, TMDb: {Tmdb}",
+            canonicalSeriesTitle,
+            seriesImdbId,
+            seriesTmdbId
+        );
+    }
+
+    private BaseItem? TryResolveItemByRequestId(SubtitleSearchRequest request)
+    {
+        Guid? id = TryGetRequestItemGuid(request);
+        if (id == null || id == Guid.Empty)
+        {
+            _logger.LogInformation("Subs.ro: Could not resolve request item id; will try path lookup");
+            return null;
+        }
+
+        try
+        {
+            return _libraryManager!.GetItemById(id.Value);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Subs.ro: Failed to load item by id {ItemId}; will try path lookup", id);
+            return null;
+        }
+    }
+
+    private BaseItem? TryResolveItemByRequestPath(SubtitleSearchRequest request)
+    {
+        var path = TryGetRequestPath(request);
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            _logger.LogInformation("Subs.ro: No request path available for lookup");
+            return null;
+        }
+
+        try
+        {
+            var lm = _libraryManager!;
+            var t = lm.GetType();
+            var nullableBool = typeof(bool?);
+
+            var methods = t.GetMethods()
+                .Where(m => m.Name == "FindByPath")
+                .ToArray();
+
+            foreach (var m in methods)
+            {
+                var ps = m.GetParameters();
+
+                if (ps.Length == 2 &&
+                    ps[0].ParameterType == typeof(string) &&
+                    ps[1].ParameterType == nullableBool)
+                {
+                    var result = m.Invoke(lm, new object?[] { path, null }) as BaseItem;
+                    if (result != null)
+                    {
+                        _logger.LogInformation("Subs.ro: Resolved item by path via FindByPath(path, null): {Path}", path);
+                        return result;
+                    }
+                }
+            }
+
+            _logger.LogInformation(
+                "Subs.ro: ILibraryManager.FindByPath not found / did not resolve item for path: {Path}",
+                path
+            );
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Subs.ro: Exception resolving item by path: {Path}", path);
+            return null;
+        }
+    }
+
+    private static Guid? TryGetRequestItemGuid(SubtitleSearchRequest request)
+    {
+        var t = request.GetType();
+
+        var candidates = new[]
+        {
+            "ItemId",
+            "InternalId",
+            "Id",
+            "EpisodeId",
+            "MediaItemId",
+            "ItemGuid"
+        };
+
+        foreach (var name in candidates)
+        {
+            var p = t.GetProperty(name);
+            if (p == null) continue;
+
+            var value = p.GetValue(request);
+            if (value is Guid g) return g;
+
+            if (value is string s && Guid.TryParse(s, out var gs)) return gs;
+        }
+
+        foreach (var p in t.GetProperties())
+        {
+            if (!p.Name.EndsWith("Id", StringComparison.OrdinalIgnoreCase)) continue;
+
+            var value = p.GetValue(request);
+            if (value is Guid g) return g;
+            if (value is string s && Guid.TryParse(s, out var gs)) return gs;
+        }
+
+        return null;
+    }
+
+    private static string? TryGetRequestPath(SubtitleSearchRequest request)
+    {
+        var t = request.GetType();
+
+        var candidates = new[]
+        {
+            "MediaPath",
+            "Path",
+            "ItemPath",
+            "FilePath",
+        };
+
+        foreach (var name in candidates)
+        {
+            var p = t.GetProperty(name);
+            if (p == null) continue;
+
+            var value = p.GetValue(request);
+            if (value is string s && !string.IsNullOrWhiteSpace(s))
+            {
+                return s;
+            }
+        }
+
+        return null;
+    }
+
+    private static IEnumerable<string> GetPublicPropertyNames(object o)
+        => o.GetType().GetProperties().Select(p => p.Name).OrderBy(n => n);
 
     /// <summary>
     /// Called when configuration changes.
