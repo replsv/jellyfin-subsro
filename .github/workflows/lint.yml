@@ -1,0 +1,40 @@
+name: Lint
+
+on:
+  pull_request:
+    branches:
+      - main
+      - master
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        global-json-file: global.json
+
+    - name: Restore tools
+      run: dotnet tool restore
+
+    - name: Check formatting (CSharpier)
+      run: dotnet csharpier check .
+
+    - name: Restore dependencies
+      run: dotnet restore JellyfinSubsPlugin/JellyfinSubsPlugin.csproj
+
+    # Whitespace is owned by CSharpier; these enforce the .editorconfig style and analyzer rules.
+    - name: Check code style
+      run: dotnet format style JellyfinSubsPlugin/JellyfinSubsPlugin.csproj --no-restore --verify-no-changes --severity warn
+
+    - name: Check analyzers
+      run: dotnet format analyzers JellyfinSubsPlugin/JellyfinSubsPlugin.csproj --no-restore --verify-no-changes --severity warn

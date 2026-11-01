@@ -111,7 +111,8 @@ internal static class SubtitleMatchingHelper
 
                     if (formatMatches.Count > 1)
                     {
-                        var best = FindClosestMatch(formatMatches, mediaFileName) ?? formatMatches[0];
+                        var best =
+                            FindClosestMatch(formatMatches, mediaFileName) ?? formatMatches[0];
                         logger?.LogDebug(
                             "Episode tie-break: multiple format matches '{Format}', using closest: {FileName}",
                             mediaFormat,
@@ -121,7 +122,8 @@ internal static class SubtitleMatchingHelper
                     }
                 }
 
-                var closest = FindClosestMatch(episodeCandidates, mediaFileName) ?? episodeCandidates[0];
+                var closest =
+                    FindClosestMatch(episodeCandidates, mediaFileName) ?? episodeCandidates[0];
                 logger?.LogDebug(
                     "Episode tie-break: no format match, using closest to media filename: {FileName}",
                     closest
