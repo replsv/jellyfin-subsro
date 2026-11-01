@@ -1,6 +1,8 @@
 using Jellyfin.Plugin.SubsRo.Extensions;
 using Jellyfin.Plugin.SubsRo.Models;
 using Jellyfin.Plugin.SubsRo.Utilities;
+using MediaBrowser.Controller.Entities.TV;
+using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Providers;
 using MediaBrowser.Controller.Subtitles;
 using MediaBrowser.Model.Entities;
@@ -13,12 +15,18 @@ public sealed class SubsRoDownloader : ISubtitleProvider
 {
     private readonly ILogger<SubsRoDownloader> _logger;
     private readonly SubsRoApiV1 _apiV1;
+    private readonly ILibraryManager _libraryManager;
 
-    public SubsRoDownloader(ILogger<SubsRoDownloader> logger, SubsRoApiV1 apiV1)
+    public SubsRoDownloader(
+        ILogger<SubsRoDownloader> logger,
+        SubsRoApiV1 apiV1,
+        ILibraryManager libraryManager
+    )
     {
         Instance = this;
         _logger = logger;
         _apiV1 = apiV1;
+        _libraryManager = libraryManager;
         _logger.LogInformation("SubsRoDownloader initialized");
     }
 
@@ -148,10 +156,11 @@ public sealed class SubsRoDownloader : ISubtitleProvider
     )
     {
         _logger.LogInformation(
-            "Subs.ro: Search called for: {Name}, ContentType: {ContentType}, Language: {Language}",
+            "Subs.ro: Search called for: {Name}, ContentType: {ContentType}, Language: {Language}, SeriesName: {SeriesName}",
             request.Name,
             request.ContentType,
-            request.Language
+            request.Language,
+            request.SeriesName
         );
 
         var apiKey = GetApiKey();
@@ -168,7 +177,14 @@ public sealed class SubsRoDownloader : ISubtitleProvider
 
         try
         {
-            var imdbId = request.GetProviderId(MetadataProvider.Imdb);
+            // For episodes Jellyfin passes the episode's own provider ids and title,
+            // but subs.ro indexes TV subtitles by series, so search with the series' data.
+            var series =
+                request.ContentType == VideoContentType.Episode ? ResolveSeries(request) : null;
+
+            var imdbId =
+                series?.GetProviderId(MetadataProvider.Imdb)
+                ?? request.GetProviderId(MetadataProvider.Imdb);
             if (!string.IsNullOrEmpty(imdbId))
             {
                 _logger.LogDebug("Searching by IMDb ID: {ImdbId}", imdbId);
@@ -191,7 +207,9 @@ public sealed class SubsRoDownloader : ISubtitleProvider
                 }
             }
 
-            var tmdbId = request.GetProviderId(MetadataProvider.Tmdb);
+            var tmdbId =
+                series?.GetProviderId(MetadataProvider.Tmdb)
+                ?? request.GetProviderId(MetadataProvider.Tmdb);
             if (!string.IsNullOrEmpty(tmdbId))
             {
                 _logger.LogDebug("Searching by TMDb ID: {TmdbId}", tmdbId);
@@ -214,18 +232,17 @@ public sealed class SubsRoDownloader : ISubtitleProvider
                 }
             }
 
-            if (!string.IsNullOrEmpty(request.Name))
+            var title =
+                request.ContentType == VideoContentType.Episode
+                    ? series?.Name ?? request.SeriesName
+                    : request.Name;
+
+            if (!string.IsNullOrEmpty(title))
             {
-                _logger.LogDebug("Searching by title: {Title}", request.Name);
+                _logger.LogDebug("Searching by title: {Title}", title);
 
                 var searchResponse = await _apiV1
-                    .SearchSubtitlesAsync(
-                        "title",
-                        request.Name,
-                        language,
-                        apiKey,
-                        cancellationToken
-                    )
+                    .SearchSubtitlesAsync("title", title, language, apiKey, cancellationToken)
                     .ConfigureAwait(false);
 
                 if (searchResponse?.Items != null)
@@ -244,6 +261,41 @@ public sealed class SubsRoDownloader : ISubtitleProvider
         {
             _logger.LogError(ex, "Subs.ro: Error searching for subtitles");
             return Array.Empty<RemoteSubtitleInfo>();
+        }
+    }
+
+    private Series? ResolveSeries(SubtitleSearchRequest request)
+    {
+        if (string.IsNullOrEmpty(request.MediaPath))
+        {
+            return null;
+        }
+
+        try
+        {
+            if (_libraryManager.FindByPath(request.MediaPath, false) is not Episode episode)
+            {
+                _logger.LogDebug("Subs.ro: No episode found for path: {Path}", request.MediaPath);
+                return null;
+            }
+
+            var series = episode.Series;
+            _logger.LogDebug(
+                "Subs.ro: Resolved series {Series} (IMDb: {ImdbId}, TMDb: {TmdbId})",
+                series?.Name,
+                series?.GetProviderId(MetadataProvider.Imdb),
+                series?.GetProviderId(MetadataProvider.Tmdb)
+            );
+            return series;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(
+                ex,
+                "Subs.ro: Failed to resolve series for path: {Path}",
+                request.MediaPath
+            );
+            return null;
         }
     }
 
