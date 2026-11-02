@@ -91,6 +91,17 @@ dotnet build --configuration Release
 # The output will be in JellyfinSubsPlugin/bin/Release/net9.0/
 ```
 
+### Formatting and Linting
+
+Code is formatted with [CSharpier](https://csharpier.com/) and style rules from `.editorconfig` are checked in CI (`.github/workflows/lint.yml`). Run the same checks locally:
+
+```bash
+dotnet tool restore
+dotnet csharpier format .
+dotnet format style JellyfinSubsPlugin/JellyfinSubsPlugin.csproj --verify-no-changes --severity warn
+dotnet format analyzers JellyfinSubsPlugin/JellyfinSubsPlugin.csproj --verify-no-changes --severity warn
+```
+
 ### Manual Deployment After Building
 
 After building, deploy the plugin to your Jellyfin server:
