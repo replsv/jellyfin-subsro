@@ -9,6 +9,14 @@
         "imageUrl": "https://raw.githubusercontent.com/replsv/jellyfin-subsro/main/logo.png",
         "versions": [
             {
+                "version": "0.3.0",
+                "changelog": "- Search subs.ro by series IDs and title for TV episodes (#7)\n- Add CSharpier and code style checks to CI (#8)\n- Fix subtitle matching for TV episodes like the movies (#5)\n- Update manifest.json for version 0.2.0",
+                "targetAbi": "10.11.5.0",
+                "sourceUrl": "https://github.com/replsv/jellyfin-subsro/releases/download/v0.3.0/jellyfin-subsro-0.3.0.zip",
+                "checksum": "54a25fc8d0c0c048be710d6eae8039a8",
+                "timestamp": "2026-11-02T00:07:06Z"
+            },
+            {
                 "version": "0.2.0",
                 "changelog": "- fix: publish assets and auto-create release (#2)\n- Update manifest.json for version 0.1.2\n- chore: update api endpoint (#1)\n- Update manifest.json for version 0.1.1",
                 "targetAbi": "10.11.5.0",
